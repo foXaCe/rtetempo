@@ -7,6 +7,7 @@ import pytest
 
 from custom_components.rtetempo import (
     PLATFORMS,
+    async_migrate_entry,
     async_setup_entry,
     async_unload_entry,
     update_listener,
@@ -45,6 +46,17 @@ def mock_entry():
     entry.async_on_unload = MagicMock()
     entry.add_update_listener = MagicMock()
     return entry
+
+
+class TestAsyncMigrateEntry:
+    """Tests for async_migrate_entry."""
+
+    @pytest.mark.asyncio
+    async def test_migrate_v1_returns_true(self, mock_hass, mock_entry):
+        """Test migration from version 1 succeeds."""
+        mock_entry.version = 1
+        result = await async_migrate_entry(mock_hass, mock_entry)
+        assert result is True
 
 
 class TestAsyncSetupEntry:
