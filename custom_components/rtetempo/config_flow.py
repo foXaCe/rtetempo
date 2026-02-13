@@ -4,13 +4,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import voluptuous as vol
+from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.core import callback
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from requests.exceptions import RequestException
-import voluptuous as vol
-
-from homeassistant import config_entries
-from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 
 from .api_worker import BadRequest, ServerError, UnexpectedError, application_tester
 from .const import CONFIG_CLIEND_SECRET, CONFIG_CLIENT_ID, DOMAIN, OPTION_ADJUSTED_DAYS
@@ -33,7 +32,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial step."""
         # No input
         if user_input is None:
@@ -94,7 +93,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
