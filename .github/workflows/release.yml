@@ -9,8 +9,33 @@ permissions:
   contents: write
 
 jobs:
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/ruff-action@v3
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-asyncio pytest-homeassistant-custom-component coverage
+          pip install homeassistant aiohttp
+      - name: Run tests with coverage
+        run: |
+          coverage run -m pytest tests/ -v
+          coverage report --fail-under=95
+
   release:
     name: Create Release
+    needs: [ruff, tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
