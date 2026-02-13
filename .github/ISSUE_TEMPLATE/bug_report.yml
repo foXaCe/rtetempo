@@ -1,0 +1,42 @@
+name: Bug Report
+description: Report a bug with RTE Tempo
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the form below.
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      description: Which version of RTE Tempo are you using?
+      placeholder: "1.3.2"
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      description: Which version of Home Assistant are you using?
+      placeholder: "2024.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the bug clearly.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste any relevant log output here.
+      render: text
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any additional context about the problem.
