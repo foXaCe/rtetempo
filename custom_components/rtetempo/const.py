@@ -1,4 +1,8 @@
 """Constants for the RTE Tempo Calendar integration."""
+
+from __future__ import annotations
+
+import datetime
 from zoneinfo import ZoneInfo
 
 DOMAIN = "rtetempo"
@@ -66,3 +70,15 @@ CYCLE_START_DAY = 1
 CONFIRM_HOUR = 10
 CONFIRM_MIN = 40
 CONFIRM_CHECK = 11
+
+
+# OpenDPE Forecast
+
+OPENDPE_API_URL = "https://open-dpe.fr/assets/tempo_days_lite.json"
+OPENDPE_ATTRIBUTION = "Prévisions fournies par open-dpe.fr"
+OPENDPE_UPDATE_INTERVAL = datetime.timedelta(hours=6)
+OPENDPE_COLOR_MAP: dict[str, str] = {
+    "rouge": API_VALUE_RED,
+    "blanc": API_VALUE_WHITE,
+    "bleu": API_VALUE_BLUE,
+}

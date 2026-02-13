@@ -1,4 +1,5 @@
 """Sensors for RTE Tempo Calendar integration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -80,6 +81,23 @@ async def async_setup_entry(
     ]
     # Add the entities to HA
     async_add_entities(sensors, True)
+    # OpenDPE Forecast sensors (non-blocking)
+    from .forecast_coordinator import ForecastCoordinator
+    from .sensor_forecast import OpenDPEForecastSensor
+
+    forecast_coordinator = ForecastCoordinator(hass)
+    forecast_sensors = [
+        OpenDPEForecastSensor(forecast_coordinator, config_entry.entry_id, offset, visual)
+        for offset in range(2, 8)
+        for visual in (False, True)
+    ]
+    async_add_entities(forecast_sensors)
+    # Non-blocking: si OpenDPE est down, les sensors existants fonctionnent toujours
+    config_entry.async_create_background_task(
+        hass,
+        forecast_coordinator.async_config_entry_first_refresh(),
+        "opendpe_forecast_first_refresh",
+    )
 
 
 class CurrentColor(SensorEntity):
@@ -523,10 +541,7 @@ class NextCycleTime(SensorEntity):
     def update(self) -> None:
         """Update the value of the sensor from the thread object memory cache."""
         localized_now = datetime.datetime.now(tz=FRANCE_TZ)
-        if (
-            localized_now.month >= CYCLE_START_MONTH
-            and localized_now.day >= CYCLE_START_DAY
-        ):
+        if localized_now.month >= CYCLE_START_MONTH and localized_now.day >= CYCLE_START_DAY:
             self._attr_native_value = datetime.datetime(
                 year=localized_now.year + 1,
                 month=CYCLE_START_MONTH,

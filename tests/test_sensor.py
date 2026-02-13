@@ -1,7 +1,7 @@
 """Tests for the sensor platform."""
+
 from __future__ import annotations
 
-import asyncio
 import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -45,7 +45,6 @@ from .conftest import (
     make_tempo_day_date,
     make_tempo_day_time,
 )
-
 
 # ── Helper functions ────────────────────────────────────────────────────
 
@@ -121,9 +120,7 @@ class TestCurrentColor:
         day = make_tempo_day_time(2024, 1, 15, API_VALUE_BLUE)
         mock_api_worker.get_adjusted_days.return_value = [day]
         sensor = CurrentColor("cfg", mock_api_worker, False)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.timedelta = datetime.timedelta
             sensor.update()
@@ -135,9 +132,7 @@ class TestCurrentColor:
         day = make_tempo_day_time(2024, 1, 15, API_VALUE_RED)
         mock_api_worker.get_adjusted_days.return_value = [day]
         sensor = CurrentColor("cfg", mock_api_worker, True)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.timedelta = datetime.timedelta
             sensor.update()
@@ -148,9 +143,7 @@ class TestCurrentColor:
         now = datetime.datetime(2024, 1, 15, 10, 0, tzinfo=FRANCE_TZ)
         mock_api_worker.get_adjusted_days.return_value = []
         sensor = CurrentColor("cfg", mock_api_worker, False)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             sensor.update()
         assert sensor._attr_available is False
@@ -182,9 +175,7 @@ class TestNextColor:
         tomorrow = make_tempo_day_time(2024, 1, 16, API_VALUE_WHITE)
         mock_api_worker.get_adjusted_days.return_value = [today, tomorrow]
         sensor = NextColor("cfg", mock_api_worker, False)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.timedelta = datetime.timedelta
             sensor.update()
@@ -197,9 +188,7 @@ class TestNextColor:
         tomorrow = make_tempo_day_time(2024, 1, 16, API_VALUE_RED)
         mock_api_worker.get_adjusted_days.return_value = [today, tomorrow]
         sensor = NextColor("cfg", mock_api_worker, True)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.timedelta = datetime.timedelta
             sensor.update()
@@ -211,9 +200,7 @@ class TestNextColor:
         now = datetime.datetime(2024, 1, 15, 10, 0, tzinfo=FRANCE_TZ)
         mock_api_worker.get_adjusted_days.return_value = []
         sensor = NextColor("cfg", mock_api_worker, True)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             sensor.update()
         assert sensor._attr_native_value == SENSOR_COLOR_UNKNOWN_EMOJI
@@ -224,9 +211,7 @@ class TestNextColor:
         now = datetime.datetime(2024, 1, 15, 10, 0, tzinfo=FRANCE_TZ)
         mock_api_worker.get_adjusted_days.return_value = []
         sensor = NextColor("cfg", mock_api_worker, False)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             sensor.update()
         assert sensor._attr_available is False
@@ -247,9 +232,7 @@ class TestNextColorTime:
         """After 6 AM, next change is tomorrow at 6 AM."""
         now = datetime.datetime(2024, 1, 15, 10, 0, tzinfo=FRANCE_TZ)
         sensor = NextColorTime("cfg")
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
             mock_dt.timedelta = datetime.timedelta
@@ -261,9 +244,7 @@ class TestNextColorTime:
         """Before 6 AM, next change is today at 6 AM."""
         now = datetime.datetime(2024, 1, 15, 3, 0, tzinfo=FRANCE_TZ)
         sensor = NextColorTime("cfg")
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
             mock_dt.timedelta = datetime.timedelta
@@ -301,9 +282,7 @@ class TestDaysLeft:
         days = build_sample_days_date(2024)
         mock_api_worker.get_regular_days.return_value = days
         sensor = DaysLeft("cfg", mock_api_worker, API_VALUE_BLUE)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             mock_dt.timedelta = datetime.timedelta
@@ -318,9 +297,7 @@ class TestDaysLeft:
         now = datetime.datetime(2025, 3, 15, 10, 0, tzinfo=FRANCE_TZ)
         mock_api_worker.get_regular_days.return_value = []
         sensor = DaysLeft("cfg", mock_api_worker, API_VALUE_RED)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             mock_dt.timedelta = datetime.timedelta
@@ -349,9 +326,7 @@ class TestDaysUsed:
         days = build_sample_days_date(2024)
         mock_api_worker.get_regular_days.return_value = days
         sensor = DaysUsed("cfg", mock_api_worker, API_VALUE_BLUE)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             sensor.update()
@@ -363,9 +338,7 @@ class TestDaysUsed:
         days = build_sample_days_date(2024)
         mock_api_worker.get_regular_days.return_value = days
         sensor = DaysUsed("cfg", mock_api_worker, API_VALUE_WHITE)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             sensor.update()
@@ -376,9 +349,7 @@ class TestDaysUsed:
         days = build_sample_days_date(2024)
         mock_api_worker.get_regular_days.return_value = days
         sensor = DaysUsed("cfg", mock_api_worker, API_VALUE_RED)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             sensor.update()
@@ -388,9 +359,7 @@ class TestDaysUsed:
         now = datetime.datetime(2024, 11, 20, 10, 0, tzinfo=FRANCE_TZ)
         mock_api_worker.get_regular_days.return_value = []
         sensor = DaysUsed("cfg", mock_api_worker, API_VALUE_BLUE)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             sensor.update()
@@ -411,9 +380,7 @@ class TestNextCycleTime:
         """After Sept 1 -> next cycle is next year."""
         now = datetime.datetime(2024, 10, 15, 10, 0, tzinfo=FRANCE_TZ)
         sensor = NextCycleTime("cfg")
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
             sensor.update()
@@ -425,9 +392,7 @@ class TestNextCycleTime:
         """Before Sept 1 -> next cycle is this year."""
         now = datetime.datetime(2024, 5, 15, 10, 0, tzinfo=FRANCE_TZ)
         sensor = NextCycleTime("cfg")
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
             sensor.update()
@@ -449,9 +414,7 @@ class TestOffPeakChangeTime:
         """Before 6 AM -> next change is today at 6 AM."""
         now = datetime.datetime(2024, 1, 15, 3, 0, tzinfo=FRANCE_TZ)
         sensor = OffPeakChangeTime("cfg")
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
             mock_dt.timedelta = datetime.timedelta
@@ -463,9 +426,7 @@ class TestOffPeakChangeTime:
         """Between 6 AM and 10 PM -> next change is today at 10 PM."""
         now = datetime.datetime(2024, 1, 15, 14, 0, tzinfo=FRANCE_TZ)
         sensor = OffPeakChangeTime("cfg")
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
             mock_dt.timedelta = datetime.timedelta
@@ -477,9 +438,7 @@ class TestOffPeakChangeTime:
         """After 10 PM -> next change is tomorrow at 6 AM."""
         now = datetime.datetime(2024, 1, 15, 23, 0, tzinfo=FRANCE_TZ)
         sensor = OffPeakChangeTime("cfg")
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
             mock_dt.timedelta = datetime.timedelta
@@ -501,18 +460,28 @@ class TestSensorAsyncSetupEntry:
 
     @pytest.mark.asyncio
     async def test_success(self, mock_api_worker):
-        """Setup creates all 13 sensor entities."""
+        """Setup creates 13 existing + 12 forecast sensor entities."""
         hass = MagicMock()
         hass.data = {DOMAIN: {"entry_id": mock_api_worker}}
         config_entry = MagicMock()
         config_entry.entry_id = "entry_id"
         config_entry.title = "Test"
+        config_entry.async_create_background_task = MagicMock()
         add_entities = MagicMock()
-        with patch("custom_components.rtetempo.sensor.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch("custom_components.rtetempo.sensor.asyncio.sleep", new_callable=AsyncMock),
+            patch("custom_components.rtetempo.forecast_coordinator.async_get_clientsession"),
+            patch("homeassistant.helpers.frame.report_usage"),
+        ):
             await async_setup_entry(hass, config_entry, add_entities)
-        add_entities.assert_called_once()
-        entities = add_entities.call_args[0][0]
-        assert len(entities) == 13
+        # Called twice: first with 13 existing sensors, then with 12 forecast sensors
+        assert add_entities.call_count == 2
+        existing_entities = add_entities.call_args_list[0][0][0]
+        forecast_entities = add_entities.call_args_list[1][0][0]
+        assert len(existing_entities) == 13
+        assert len(forecast_entities) == 12
+        # Verify background task was created for non-blocking refresh
+        config_entry.async_create_background_task.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_missing_worker(self):
@@ -571,9 +540,7 @@ class TestCurrentColorEdgeCases:
         mock_api_worker.get_adjusted_days.return_value = []
         sensor = CurrentColor("cfg", mock_api_worker, True)
         sensor._attr_icon = "mdi:alert"  # Set to something else first
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             sensor.update()
         assert sensor._attr_icon == "mdi:palette"
@@ -588,9 +555,7 @@ class TestDaysLeftEdgeCases:
         now = datetime.datetime(2025, 3, 15, 10, 0, tzinfo=FRANCE_TZ)
         mock_api_worker.get_regular_days.return_value = []
         sensor = DaysLeft("cfg", mock_api_worker, API_VALUE_WHITE)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             mock_dt.timedelta = datetime.timedelta
@@ -602,9 +567,7 @@ class TestDaysLeftEdgeCases:
         now = datetime.datetime(2025, 3, 15, 10, 0, tzinfo=FRANCE_TZ)
         mock_api_worker.get_regular_days.return_value = []
         sensor = DaysLeft("cfg", mock_api_worker, API_VALUE_RED)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             mock_dt.timedelta = datetime.timedelta
@@ -621,9 +584,7 @@ class TestDaysLeftEdgeCases:
         ]
         mock_api_worker.get_regular_days.return_value = days
         sensor = DaysLeft("cfg", mock_api_worker, API_VALUE_BLUE)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             mock_dt.timedelta = datetime.timedelta
@@ -640,9 +601,7 @@ class TestDaysUsedEdgeCases:
         now = datetime.datetime(2025, 3, 15, 10, 0, tzinfo=FRANCE_TZ)
         mock_api_worker.get_regular_days.return_value = []
         sensor = DaysUsed("cfg", mock_api_worker, API_VALUE_WHITE)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             sensor.update()
@@ -657,9 +616,7 @@ class TestDaysUsedEdgeCases:
         ]
         mock_api_worker.get_regular_days.return_value = days
         sensor = DaysUsed("cfg", mock_api_worker, API_VALUE_RED)
-        with patch(
-            "custom_components.rtetempo.sensor.datetime"
-        ) as mock_dt:
+        with patch("custom_components.rtetempo.sensor.datetime") as mock_dt:
             mock_dt.datetime.now.return_value = now
             mock_dt.date = datetime.date
             sensor.update()
