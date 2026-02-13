@@ -4,6 +4,7 @@
   "codeowners": ["@hekmon"],
   "config_flow": true,
   "documentation": "https://github.com/hekmon/rtetempo/blob/v1.3.2/README.md",
+  "homeassistant": "2024.6.0",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/hekmon/rtetempo/issues",
   "requirements": [
