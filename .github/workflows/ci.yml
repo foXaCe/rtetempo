@@ -28,7 +28,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: |
-          pip install mypy homeassistant requests-oauthlib
+          pip install mypy homeassistant aiohttp
       - name: Run mypy
         run: mypy custom_components/rtetempo
 
@@ -43,7 +43,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pytest pytest-asyncio pytest-homeassistant-custom-component coverage
-          pip install homeassistant requests-oauthlib
+          pip install homeassistant aiohttp
       - name: Run tests with coverage
         run: |
           coverage run -m pytest tests/ -v

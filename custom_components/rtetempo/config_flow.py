@@ -8,10 +8,17 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import callback
-from oauthlib.oauth2.rfc6749.errors import OAuth2Error
-from requests.exceptions import RequestException
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api_worker import BadRequest, ServerError, UnexpectedError, application_tester
+from .api import (
+    RTETempoAuth,
+    RTETempoAuthError,
+    RTETempoClient,
+    RTETempoClientError,
+    RTETempoConnectionError,
+    RTETempoError,
+    RTETempoServerError,
+)
 from .const import CONFIG_CLIEND_SECRET, CONFIG_CLIENT_ID, DOMAIN, OPTION_ADJUSTED_DAYS
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,47 +41,39 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the initial step."""
-        # No input
         if user_input is None:
             return self.async_show_form(
                 step_id="user", data_schema=STEP_USER_DATA_SCHEMA
             )
-        # Validate input
         await self.async_set_unique_id(f"{DOMAIN}_{user_input[CONFIG_CLIENT_ID]}")
         self._abort_if_unique_id_configured()
         errors = {}
         try:
-            client_id = user_input[CONFIG_CLIENT_ID]
-            client_secret = user_input[CONFIG_CLIEND_SECRET]
-            await self.hass.async_add_executor_job(
-                lambda: application_tester(str(client_id), str(client_secret))
-            )
-        except RequestException as request_exception:
-            _LOGGER.error(
-                "Application validation failed: network error: %s", request_exception
-            )
-            errors["base"] = "network_error"
-        except OAuth2Error as oauth_error:
-            _LOGGER.error("Application validation failed: oauth error: %s", oauth_error)
+            client_id = str(user_input[CONFIG_CLIENT_ID])
+            client_secret = str(user_input[CONFIG_CLIEND_SECRET])
+            session = async_get_clientsession(self.hass)
+            auth = RTETempoAuth(session, client_id, client_secret)
+            client = RTETempoClient(session, auth)
+            await client.async_test_credentials()
+        except RTETempoAuthError as err:
+            _LOGGER.error("Application validation failed: auth error: %s", err)
             errors["base"] = "oauth_error"
-        except BadRequest as http_error:
-            _LOGGER.error(
-                "Application validation failed: bad request error: %s", http_error
-            )
+        except RTETempoConnectionError as err:
+            _LOGGER.error("Application validation failed: network error: %s", err)
+            errors["base"] = "network_error"
+        except RTETempoClientError as err:
+            _LOGGER.error("Application validation failed: client error: %s", err)
             errors["base"] = "http_client_error"
-        except ServerError as http_error:
-            _LOGGER.error("Application validation failed: server error: %s", http_error)
+        except RTETempoServerError as err:
+            _LOGGER.error("Application validation failed: server error: %s", err)
             errors["base"] = "http_server_error"
-        except UnexpectedError as http_error:
-            _LOGGER.error(
-                "Application validation failed: unexpected error: %s", http_error
-            )
+        except RTETempoError as err:
+            _LOGGER.error("Application validation failed: unexpected error: %s", err)
             errors["base"] = "http_unexpected_error"
         else:
             return self.async_create_entry(
                 title=user_input[CONFIG_CLIENT_ID], data=user_input
             )
-        # Show errors
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )

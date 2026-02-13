@@ -28,7 +28,7 @@ def mock_hass():
     hass.config_entries = MagicMock()
     hass.config_entries.async_forward_entry_setups = AsyncMock()
     hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
-    hass.bus = MagicMock()
+    hass.config_entries.async_reload = AsyncMock()
     return hass
 
 
@@ -64,17 +64,25 @@ class TestAsyncSetupEntry:
 
     @pytest.mark.asyncio
     async def test_setup_success(self, mock_hass, mock_entry):
-        """Test successful setup creates worker and forwards platforms."""
+        """Test successful setup creates coordinator and forwards platforms."""
         with patch(
-            "custom_components.rtetempo.APIWorker"
-        ) as mock_worker_cls:
-            mock_worker = MagicMock()
-            mock_worker_cls.return_value = mock_worker
+            "custom_components.rtetempo.TempoCoordinator"
+        ) as mock_coord_cls, patch(
+            "custom_components.rtetempo.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.RTETempoClient"
+        ), patch(
+            "custom_components.rtetempo.async_get_clientsession"
+        ):
+            mock_coord = MagicMock()
+            mock_coord.async_config_entry_first_refresh = AsyncMock()
+            mock_coord_cls.return_value = mock_coord
             result = await async_setup_entry(mock_hass, mock_entry)
         assert result is True
-        mock_worker.start.assert_called_once()
+        mock_coord.async_config_entry_first_refresh.assert_called_once()
         assert DOMAIN in mock_hass.data
         assert mock_entry.entry_id in mock_hass.data[DOMAIN]
+        assert mock_hass.data[DOMAIN][mock_entry.entry_id]["coordinator"] is mock_coord
         mock_hass.config_entries.async_forward_entry_setups.assert_called_once_with(
             mock_entry, PLATFORMS
         )
@@ -84,9 +92,17 @@ class TestAsyncSetupEntry:
         """Test setup creates hass.data[DOMAIN] if not present."""
         assert DOMAIN not in mock_hass.data
         with patch(
-            "custom_components.rtetempo.APIWorker"
-        ) as mock_worker_cls:
-            mock_worker_cls.return_value = MagicMock()
+            "custom_components.rtetempo.TempoCoordinator"
+        ) as mock_coord_cls, patch(
+            "custom_components.rtetempo.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.RTETempoClient"
+        ), patch(
+            "custom_components.rtetempo.async_get_clientsession"
+        ):
+            mock_coord = MagicMock()
+            mock_coord.async_config_entry_first_refresh = AsyncMock()
+            mock_coord_cls.return_value = mock_coord
             await async_setup_entry(mock_hass, mock_entry)
         assert DOMAIN in mock_hass.data
 
@@ -95,22 +111,38 @@ class TestAsyncSetupEntry:
         """Test setup works when hass.data[DOMAIN] already exists."""
         mock_hass.data[DOMAIN] = {}
         with patch(
-            "custom_components.rtetempo.APIWorker"
-        ) as mock_worker_cls:
-            mock_worker_cls.return_value = MagicMock()
+            "custom_components.rtetempo.TempoCoordinator"
+        ) as mock_coord_cls, patch(
+            "custom_components.rtetempo.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.RTETempoClient"
+        ), patch(
+            "custom_components.rtetempo.async_get_clientsession"
+        ):
+            mock_coord = MagicMock()
+            mock_coord.async_config_entry_first_refresh = AsyncMock()
+            mock_coord_cls.return_value = mock_coord
             await async_setup_entry(mock_hass, mock_entry)
         assert mock_entry.entry_id in mock_hass.data[DOMAIN]
 
     @pytest.mark.asyncio
-    async def test_setup_registers_stop_listener(self, mock_hass, mock_entry):
-        """Test setup registers the stop listener."""
+    async def test_setup_registers_update_listener(self, mock_hass, mock_entry):
+        """Test setup registers the update listener."""
         with patch(
-            "custom_components.rtetempo.APIWorker"
-        ) as mock_worker_cls:
-            mock_worker = MagicMock()
-            mock_worker_cls.return_value = mock_worker
+            "custom_components.rtetempo.TempoCoordinator"
+        ) as mock_coord_cls, patch(
+            "custom_components.rtetempo.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.RTETempoClient"
+        ), patch(
+            "custom_components.rtetempo.async_get_clientsession"
+        ):
+            mock_coord = MagicMock()
+            mock_coord.async_config_entry_first_refresh = AsyncMock()
+            mock_coord_cls.return_value = mock_coord
             await async_setup_entry(mock_hass, mock_entry)
-        mock_hass.bus.async_listen_once.assert_called_once()
+        mock_entry.add_update_listener.assert_called_once()
+        mock_entry.async_on_unload.assert_called_once()
 
 
 class TestAsyncUnloadEntry:
@@ -119,7 +151,7 @@ class TestAsyncUnloadEntry:
     @pytest.mark.asyncio
     async def test_unload_success(self, mock_hass, mock_entry):
         """Test successful unload removes entry data."""
-        mock_hass.data[DOMAIN] = {mock_entry.entry_id: {"api_worker": MagicMock()}}
+        mock_hass.data[DOMAIN] = {mock_entry.entry_id: {"coordinator": MagicMock()}}
         result = await async_unload_entry(mock_hass, mock_entry)
         assert result is True
         assert mock_entry.entry_id not in mock_hass.data[DOMAIN]
@@ -128,7 +160,7 @@ class TestAsyncUnloadEntry:
     async def test_unload_failure(self, mock_hass, mock_entry):
         """Test failed unload keeps entry data."""
         mock_hass.config_entries.async_unload_platforms = AsyncMock(return_value=False)
-        mock_hass.data[DOMAIN] = {mock_entry.entry_id: {"api_worker": MagicMock()}}
+        mock_hass.data[DOMAIN] = {mock_entry.entry_id: {"coordinator": MagicMock()}}
         result = await async_unload_entry(mock_hass, mock_entry)
         assert result is False
         assert mock_entry.entry_id in mock_hass.data[DOMAIN]
@@ -138,17 +170,7 @@ class TestUpdateListener:
     """Tests for update_listener."""
 
     @pytest.mark.asyncio
-    async def test_update_options(self, mock_hass, mock_entry):
-        """Test options are updated on the worker."""
-        mock_worker = MagicMock()
-        mock_hass.data[DOMAIN] = {mock_entry.entry_id: {"api_worker": mock_worker}}
-        mock_entry.options = {OPTION_ADJUSTED_DAYS: True}
+    async def test_update_reloads_entry(self, mock_hass, mock_entry):
+        """Test update listener reloads the config entry."""
         await update_listener(mock_hass, mock_entry)
-        mock_worker.update_options.assert_called_once_with(True)
-
-    @pytest.mark.asyncio
-    async def test_update_listener_missing_worker(self, mock_hass, mock_entry):
-        """Test update listener handles missing worker gracefully."""
-        mock_hass.data[DOMAIN] = {}
-        # Should not raise
-        await update_listener(mock_hass, mock_entry)
+        mock_hass.config_entries.async_reload.assert_called_once_with(mock_entry.entry_id)

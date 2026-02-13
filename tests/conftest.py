@@ -6,48 +6,51 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.rtetempo.api_worker import APIWorker, TempoDay
+from custom_components.rtetempo.api.models import TempoData, TempoDay
 from custom_components.rtetempo.const import (
     API_VALUE_BLUE,
     API_VALUE_RED,
     API_VALUE_WHITE,
     FRANCE_TZ,
 )
+from custom_components.rtetempo.tempo_coordinator import TempoCoordinator
 
 
 @pytest.fixture
-def mock_api_worker() -> MagicMock:
-    """Create a mock APIWorker."""
-    worker = MagicMock(spec=APIWorker)
-    worker.adjusted_days = False
-    worker._tempo_days_time = []
-    worker._tempo_days_date = []
-    return worker
+def mock_coordinator() -> MagicMock:
+    """Create a mock TempoCoordinator with empty TempoData."""
+    coordinator = MagicMock(spec=TempoCoordinator)
+    coordinator.data = TempoData(
+        adjusted_days=[],
+        regular_days=[],
+        data_end=None,
+    )
+    return coordinator
 
 
 def make_tempo_day_date(
     year: int, month: int, day: int, value: str
 ) -> TempoDay:
-    """Create a TempoDay with date-based Start/End."""
+    """Create a TempoDay with date-based start/end."""
     return TempoDay(
-        Start=datetime.date(year, month, day),
-        End=datetime.date(year, month, day) + datetime.timedelta(days=1),
-        Value=value,
-        Updated=datetime.datetime(year, month, day, 10, 0, tzinfo=FRANCE_TZ),
+        start=datetime.date(year, month, day),
+        end=datetime.date(year, month, day) + datetime.timedelta(days=1),
+        value=value,
+        updated=datetime.datetime(year, month, day, 10, 0, tzinfo=FRANCE_TZ),
     )
 
 
 def make_tempo_day_time(
     year: int, month: int, day: int, value: str
 ) -> TempoDay:
-    """Create a TempoDay with datetime-based Start/End (adjusted 6h-6h)."""
+    """Create a TempoDay with datetime-based start/end (adjusted 6h-6h)."""
     start = datetime.datetime(year, month, day, 6, 0, tzinfo=FRANCE_TZ)
     end = start + datetime.timedelta(days=1)
     return TempoDay(
-        Start=start,
-        End=end,
-        Value=value,
-        Updated=datetime.datetime(year, month, day, 10, 0, tzinfo=FRANCE_TZ),
+        start=start,
+        end=end,
+        value=value,
+        updated=datetime.datetime(year, month, day, 10, 0, tzinfo=FRANCE_TZ),
     )
 
 
@@ -57,7 +60,6 @@ def build_sample_days_date(cycle_year: int = 2024) -> list[TempoDay]:
     Returns days from Sept 1 to Dec 31 with a mix of colors.
     """
     days = []
-    # 50 blue, 20 white, 10 red in this sample set (Sept-Dec)
     start = datetime.date(cycle_year, 9, 1)
     for i in range(80):
         d = start + datetime.timedelta(days=i)
@@ -69,10 +71,10 @@ def build_sample_days_date(cycle_year: int = 2024) -> list[TempoDay]:
             color = API_VALUE_RED
         days.append(
             TempoDay(
-                Start=d,
-                End=d + datetime.timedelta(days=1),
-                Value=color,
-                Updated=datetime.datetime(
+                start=d,
+                end=d + datetime.timedelta(days=1),
+                value=color,
+                updated=datetime.datetime(
                     d.year, d.month, d.day, 10, 0, tzinfo=FRANCE_TZ
                 ),
             )
@@ -95,12 +97,25 @@ def build_sample_days_time(cycle_year: int = 2024) -> list[TempoDay]:
         s = datetime.datetime(d.year, d.month, d.day, 6, 0, tzinfo=FRANCE_TZ)
         days.append(
             TempoDay(
-                Start=s,
-                End=s + datetime.timedelta(days=1),
-                Value=color,
-                Updated=datetime.datetime(
+                start=s,
+                end=s + datetime.timedelta(days=1),
+                value=color,
+                updated=datetime.datetime(
                     d.year, d.month, d.day, 10, 0, tzinfo=FRANCE_TZ
                 ),
             )
         )
     return days
+
+
+def make_tempo_data(
+    adjusted_days: list[TempoDay] | None = None,
+    regular_days: list[TempoDay] | None = None,
+    data_end: datetime.datetime | None = None,
+) -> TempoData:
+    """Helper to create TempoData."""
+    return TempoData(
+        adjusted_days=adjusted_days or [],
+        regular_days=regular_days or [],
+        data_end=data_end,
+    )

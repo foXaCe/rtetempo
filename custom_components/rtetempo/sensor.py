@@ -11,11 +11,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api_worker import APIWorker
 from .const import (
     API_ATTRIBUTION,
-    API_REQ_TIMEOUT,
     API_VALUE_BLUE,
     API_VALUE_RED,
     API_VALUE_WHITE,
@@ -39,6 +38,7 @@ from .const import (
     TOTAL_RED_DAYS,
     TOTAL_WHITE_DAYS,
 )
+from .tempo_coordinator import TempoCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,34 +51,23 @@ async def async_setup_entry(
 ) -> None:
     """Modern (thru config entry) sensors setup."""
     _LOGGER.debug("%s: setting up sensor plateform", config_entry.title)
-    # Retrieve the API Worker object
-    try:
-        api_worker = hass.data[DOMAIN][config_entry.entry_id]["api_worker"]
-    except KeyError:
-        _LOGGER.error(
-            "%s: can not setup sensors: failed to get the API worker object",
-            config_entry.title,
-        )
-        return
-    # Wait for API worker to get first batch of data before initializing sensors
-    await hass.async_add_executor_job(api_worker.wait_for_data, API_REQ_TIMEOUT)
+    coordinator: TempoCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     # Init sensors
-    sensors = [
-        CurrentColor(config_entry.entry_id, api_worker, False),
-        CurrentColor(config_entry.entry_id, api_worker, True),
-        NextColor(config_entry.entry_id, api_worker, False),
-        NextColor(config_entry.entry_id, api_worker, True),
+    sensors: list[SensorEntity] = [
+        CurrentColor(coordinator, config_entry.entry_id, False),
+        CurrentColor(coordinator, config_entry.entry_id, True),
+        NextColor(coordinator, config_entry.entry_id, False),
+        NextColor(coordinator, config_entry.entry_id, True),
         NextColorTime(config_entry.entry_id),
-        DaysLeft(config_entry.entry_id, api_worker, API_VALUE_BLUE),
-        DaysLeft(config_entry.entry_id, api_worker, API_VALUE_WHITE),
-        DaysLeft(config_entry.entry_id, api_worker, API_VALUE_RED),
-        DaysUsed(config_entry.entry_id, api_worker, API_VALUE_BLUE),
-        DaysUsed(config_entry.entry_id, api_worker, API_VALUE_WHITE),
-        DaysUsed(config_entry.entry_id, api_worker, API_VALUE_RED),
+        DaysLeft(coordinator, config_entry.entry_id, API_VALUE_BLUE),
+        DaysLeft(coordinator, config_entry.entry_id, API_VALUE_WHITE),
+        DaysLeft(coordinator, config_entry.entry_id, API_VALUE_RED),
+        DaysUsed(coordinator, config_entry.entry_id, API_VALUE_BLUE),
+        DaysUsed(coordinator, config_entry.entry_id, API_VALUE_WHITE),
+        DaysUsed(coordinator, config_entry.entry_id, API_VALUE_RED),
         NextCycleTime(config_entry.entry_id),
         OffPeakChangeTime(config_entry.entry_id),
     ]
-    # Add the entities to HA
     async_add_entities(sensors, True)
     # OpenDPE Forecast sensors (non-blocking)
     from .forecast_coordinator import ForecastCoordinator
@@ -91,7 +80,6 @@ async def async_setup_entry(
         for visual in (False, True)
     ]
     async_add_entities(forecast_sensors)
-    # Non-blocking: si OpenDPE est down, les sensors existants fonctionnent toujours
     config_entry.async_create_background_task(
         hass,
         forecast_coordinator.async_config_entry_first_refresh(),
@@ -99,19 +87,17 @@ async def async_setup_entry(
     )
 
 
-class CurrentColor(SensorEntity):
+class CurrentColor(CoordinatorEntity[TempoCoordinator], SensorEntity):
     """Current Color Sensor Entity."""
 
-    # Generic properties
     _attr_has_entity_name = True
     _attr_attribution = API_ATTRIBUTION
-    # Sensor properties
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_icon = "mdi:palette"
 
-    def __init__(self, config_id: str, api_worker: APIWorker, visual: bool) -> None:
+    def __init__(self, coordinator: TempoCoordinator, config_id: str, visual: bool) -> None:
         """Initialize the Current Color Sensor."""
-        # Generic entity properties
+        super().__init__(coordinator)
         if visual:
             self._attr_name = "Couleur actuelle (visuel)"
             self._attr_unique_id = f"{DOMAIN}_{config_id}_current_color_emoji"
@@ -130,11 +116,8 @@ class CurrentColor(SensorEntity):
                 SENSOR_COLOR_RED_NAME,
                 SENSOR_COLOR_UNKNOWN_NAME,
             ]
-        # Sensor entity properties
         self._attr_native_value: str | None = None
-        # RTE Tempo Calendar entity properties
         self._config_id = config_id
-        self._api_worker = api_worker
         self._visual = visual
 
     @property
@@ -148,39 +131,36 @@ class CurrentColor(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    def update(self) -> None:
-        """Update the value of the sensor from the thread object memory cache."""
+    @property
+    def native_value(self) -> str | None:
+        """Return the current color."""
+        if not self.coordinator.data:
+            return None
         localized_now = datetime.datetime.now(FRANCE_TZ)
-        for tempo_day in self._api_worker.get_adjusted_days():
-            if tempo_day.Start <= localized_now < tempo_day.End:
-                # Found a match !
+        for tempo_day in self.coordinator.data.adjusted_days:
+            if tempo_day.start <= localized_now < tempo_day.end:
                 self._attr_available = True
                 if self._visual:
-                    self._attr_native_value = get_color_emoji(tempo_day.Value)
-                    self._attr_icon = get_color_icon(tempo_day.Value)
-                else:
-                    self._attr_native_value = get_color_name(tempo_day.Value)
-                return
-        # Nothing found
+                    self._attr_icon = get_color_icon(tempo_day.value)
+                    return get_color_emoji(tempo_day.value)
+                return get_color_name(tempo_day.value)
         self._attr_available = False
-        self._attr_native_value = None
         if self._visual:
             self._attr_icon = "mdi:palette"
+        return None
 
 
-class NextColor(SensorEntity):
+class NextColor(CoordinatorEntity[TempoCoordinator], SensorEntity):
     """Next Color Sensor Entity."""
 
-    # Generic properties
     _attr_has_entity_name = True
     _attr_attribution = API_ATTRIBUTION
-    # Sensor properties
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_icon = "mdi:palette"
 
-    def __init__(self, config_id: str, api_worker: APIWorker, visual: bool) -> None:
+    def __init__(self, coordinator: TempoCoordinator, config_id: str, visual: bool) -> None:
         """Initialize the Next Color Sensor."""
-        # Generic entity properties
+        super().__init__(coordinator)
         if visual:
             self._attr_name = "Prochaine couleur (visuel)"
             self._attr_unique_id = f"{DOMAIN}_{config_id}_next_color_emoji"
@@ -199,11 +179,8 @@ class NextColor(SensorEntity):
                 SENSOR_COLOR_RED_NAME,
                 SENSOR_COLOR_UNKNOWN_NAME,
             ]
-        # Sensor entity properties
         self._attr_native_value: str | None = None
-        # RTE Tempo Calendar entity properties
         self._config_id = config_id
-        self._api_worker = api_worker
         self._visual = visual
 
     @property
@@ -217,27 +194,27 @@ class NextColor(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    def update(self) -> None:
-        """Update the value of the sensor from the thread object memory cache."""
+    @property
+    def native_value(self) -> str | None:
+        """Return the next color."""
+        if not self.coordinator.data:
+            if self._visual:
+                return SENSOR_COLOR_UNKNOWN_EMOJI
+            return None
         localized_now = datetime.datetime.now(FRANCE_TZ)
-        for tempo_day in self._api_worker.get_adjusted_days():
-            if localized_now < tempo_day.Start:
-                # Found a match !
+        for tempo_day in self.coordinator.data.adjusted_days:
+            if localized_now < tempo_day.start:
                 self._attr_available = True
                 if self._visual:
-                    self._attr_native_value = get_color_emoji(tempo_day.Value)
-                    self._attr_icon = get_color_icon(tempo_day.Value)
-                else:
-                    self._attr_native_value = get_color_name(tempo_day.Value)
-                return
-        # Special case for emoji
+                    self._attr_icon = get_color_icon(tempo_day.value)
+                    return get_color_emoji(tempo_day.value)
+                return get_color_name(tempo_day.value)
         if self._visual:
             self._attr_available = True
-            self._attr_native_value = SENSOR_COLOR_UNKNOWN_EMOJI
             self._attr_icon = "mdi:palette"
-        else:
-            self._attr_available = False
-            self._attr_native_value = None
+            return SENSOR_COLOR_UNKNOWN_EMOJI
+        self._attr_available = False
+        return None
 
 
 def get_color_emoji(value: str) -> str:
@@ -279,19 +256,14 @@ def get_color_name(value: str) -> str:
 class NextColorTime(SensorEntity):
     """Next Color Time Remaining Sensor Entity."""
 
-    # Generic properties
     _attr_has_entity_name = True
     _attr_name = "Prochaine couleur (changement)"
-    # Sensor properties
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
     def __init__(self, config_id: str) -> None:
         """Initialize the Next Color Time Remaining Sensor."""
-        # Generic entity properties
         self._attr_unique_id = f"{DOMAIN}_{config_id}_next_color_change"
-        # Sensor entity properties
         self._attr_native_value: datetime.datetime | None = None
-        # RTE Tempo Calendar entity properties
         self._config_id = config_id
 
     @property
@@ -327,19 +299,17 @@ class NextColorTime(SensorEntity):
             )
 
 
-class DaysLeft(SensorEntity):
+class DaysLeft(CoordinatorEntity[TempoCoordinator], SensorEntity):
     """Days Left Sensor Entity."""
 
-    # Generic properties
     _attr_has_entity_name = True
     _attr_attribution = API_ATTRIBUTION
-    # Sensor properties
     _attr_native_unit_of_measurement = "j"
     _attr_icon = "mdi:timer-sand"
 
-    def __init__(self, config_id: str, api_worker: APIWorker, color: str) -> None:
+    def __init__(self, coordinator: TempoCoordinator, config_id: str, color: str) -> None:
         """Initialize the Days Left Sensor."""
-        # Generic entity properties
+        super().__init__(coordinator)
         if color == API_VALUE_BLUE:
             self._attr_name = f"Cycle Jours restants {SENSOR_COLOR_BLUE_NAME}"
             self._attr_unique_id = f"{DOMAIN}_{config_id}_days_left_blue"
@@ -351,11 +321,8 @@ class DaysLeft(SensorEntity):
             self._attr_unique_id = f"{DOMAIN}_{config_id}_days_left_red"
         else:
             raise ValueError(f"invalid color {color}")
-        # Sensor entity properties
         self._attr_native_value: int | None = None
-        # RTE Tempo Calendar entity properties
         self._config_id = config_id
-        self._api_worker = api_worker
         self._color = color
 
     @property
@@ -369,9 +336,11 @@ class DaysLeft(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    def update(self) -> None:
-        """Update the value of the sensor from the thread object memory cache."""
-        # First compute the number of days this cycle has (handles leap year)
+    @property
+    def native_value(self) -> int | None:
+        """Return the number of days left for this color in the current cycle."""
+        if not self.coordinator.data:
+            return None
         localized_now = datetime.datetime.now(tz=FRANCE_TZ)
         if localized_now.month < CYCLE_START_MONTH:
             cycle_start = datetime.date(
@@ -392,47 +361,41 @@ class DaysLeft(SensorEntity):
                 day=CYCLE_START_DAY,
             )
         total_days = (cycle_end - cycle_start).days
-        # Now compute how many blue days there is in this cycle
         total_blue_days = total_days - TOTAL_WHITE_DAYS - TOTAL_RED_DAYS
-        # Count already defined days since the beginning of the cycle
         nb_blue_days = 0
         nb_white_days = 0
         nb_red_days = 0
-        for tempo_day in self._api_worker.get_regular_days():
-            if tempo_day.Start < cycle_start:
+        for tempo_day in self.coordinator.data.regular_days:
+            if tempo_day.start < cycle_start:
                 continue
-            if tempo_day.Value == API_VALUE_BLUE:
+            if tempo_day.value == API_VALUE_BLUE:
                 nb_blue_days += 1
-            elif tempo_day.Value == API_VALUE_WHITE:
+            elif tempo_day.value == API_VALUE_WHITE:
                 nb_white_days += 1
-            elif tempo_day.Value == API_VALUE_RED:
+            elif tempo_day.value == API_VALUE_RED:
                 nb_red_days += 1
             else:
-                raise ValueError(f"invalid color {tempo_day.Value}")
-        # Now compute remaining days
+                raise ValueError(f"invalid color {tempo_day.value}")
         if self._color == API_VALUE_BLUE:
-            self._attr_native_value = total_blue_days - nb_blue_days
-        elif self._color == API_VALUE_WHITE:
-            self._attr_native_value = TOTAL_WHITE_DAYS - nb_white_days
-        elif self._color == API_VALUE_RED:
-            self._attr_native_value = TOTAL_RED_DAYS - nb_red_days
-        else:
-            raise ValueError(f"invalid color {self._color}")
+            return total_blue_days - nb_blue_days
+        if self._color == API_VALUE_WHITE:
+            return TOTAL_WHITE_DAYS - nb_white_days
+        if self._color == API_VALUE_RED:
+            return TOTAL_RED_DAYS - nb_red_days
+        raise ValueError(f"invalid color {self._color}")
 
 
-class DaysUsed(SensorEntity):
+class DaysUsed(CoordinatorEntity[TempoCoordinator], SensorEntity):
     """Days Used Sensor Entity."""
 
-    # Generic properties
     _attr_has_entity_name = True
     _attr_attribution = API_ATTRIBUTION
-    # Sensor properties
     _attr_native_unit_of_measurement = "j"
     _attr_icon = "mdi:timer-sand-complete"
 
-    def __init__(self, config_id: str, api_worker: APIWorker, color: str) -> None:
+    def __init__(self, coordinator: TempoCoordinator, config_id: str, color: str) -> None:
         """Initialize the Days Used Sensor."""
-        # Generic entity properties
+        super().__init__(coordinator)
         if color == API_VALUE_BLUE:
             self._attr_name = f"Cycle Jours déjà placés {SENSOR_COLOR_BLUE_NAME}"
             self._attr_unique_id = f"{DOMAIN}_{config_id}_days_used_blue"
@@ -444,11 +407,8 @@ class DaysUsed(SensorEntity):
             self._attr_unique_id = f"{DOMAIN}_{config_id}_days_used_red"
         else:
             raise ValueError(f"invalid color {color}")
-        # Sensor entity properties
         self._attr_native_value: int | None = None
-        # RTE Tempo Calendar entity properties
         self._config_id = config_id
-        self._api_worker = api_worker
         self._color = color
 
     @property
@@ -462,9 +422,11 @@ class DaysUsed(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    def update(self) -> None:
-        """Update the value of the sensor from the thread object memory cache."""
-        # First compute the number of days this cycle has (handles leap year)
+    @property
+    def native_value(self) -> int | None:
+        """Return the number of days used for this color in the current cycle."""
+        if not self.coordinator.data:
+            return None
         localized_now = datetime.datetime.now(tz=FRANCE_TZ)
         if localized_now.month < CYCLE_START_MONTH:
             cycle_start = datetime.date(
@@ -476,48 +438,40 @@ class DaysUsed(SensorEntity):
             cycle_start = datetime.date(
                 year=localized_now.year, month=CYCLE_START_MONTH, day=CYCLE_START_DAY
             )
-        # Count already defined days since the beginning of the cycle
         nb_blue_days = 0
         nb_white_days = 0
         nb_red_days = 0
-        for tempo_day in self._api_worker.get_regular_days():
-            if tempo_day.Start < cycle_start:
+        for tempo_day in self.coordinator.data.regular_days:
+            if tempo_day.start < cycle_start:
                 continue
-            if tempo_day.Value == API_VALUE_BLUE:
+            if tempo_day.value == API_VALUE_BLUE:
                 nb_blue_days += 1
-            elif tempo_day.Value == API_VALUE_WHITE:
+            elif tempo_day.value == API_VALUE_WHITE:
                 nb_white_days += 1
-            elif tempo_day.Value == API_VALUE_RED:
+            elif tempo_day.value == API_VALUE_RED:
                 nb_red_days += 1
             else:
-                raise ValueError(f"invalid color {tempo_day.Value}")
-        # Now compute remaining days
+                raise ValueError(f"invalid color {tempo_day.value}")
         if self._color == API_VALUE_BLUE:
-            self._attr_native_value = nb_blue_days
-        elif self._color == API_VALUE_WHITE:
-            self._attr_native_value = nb_white_days
-        elif self._color == API_VALUE_RED:
-            self._attr_native_value = nb_red_days
-        else:
-            raise ValueError(f"invalid color {self._color}")
+            return nb_blue_days
+        if self._color == API_VALUE_WHITE:
+            return nb_white_days
+        if self._color == API_VALUE_RED:
+            return nb_red_days
+        raise ValueError(f"invalid color {self._color}")
 
 
 class NextCycleTime(SensorEntity):
     """Next Cycle Time Remaining Sensor Entity."""
 
-    # Generic properties
     _attr_has_entity_name = True
     _attr_name = "Cycle Prochaine réinitialisation"
-    # Sensor properties
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
     def __init__(self, config_id: str) -> None:
         """Initialize the Cycle Time Remaining Sensor."""
-        # Generic entity properties
         self._attr_unique_id = f"{DOMAIN}_{config_id}_next_cycle_reinit"
-        # Sensor entity properties
         self._attr_native_value: datetime.datetime | None = None
-        # RTE Tempo Calendar entity properties
         self._config_id = config_id
 
     @property
@@ -559,19 +513,14 @@ class NextCycleTime(SensorEntity):
 class OffPeakChangeTime(SensorEntity):
     """Off Peak Change Time Remaining Sensor Entity."""
 
-    # Generic properties
     _attr_has_entity_name = True
     _attr_name = "Heures Creuses (changement)"
-    # Sensor properties
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
     def __init__(self, config_id: str) -> None:
         """Initialize the Off Peak Change Time Remaining Sensor."""
-        # Generic entity properties
         self._attr_unique_id = f"{DOMAIN}_{config_id}_off_peak_change_time"
-        # Sensor entity properties
         self._attr_native_value: datetime.datetime | None = None
-        # RTE Tempo Calendar entity properties
         self._config_id = config_id
 
     @property

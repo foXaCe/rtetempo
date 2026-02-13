@@ -5,10 +5,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.data_entry_flow import FlowResultType
-from oauthlib.oauth2.rfc6749.errors import InvalidGrantError
-from requests.exceptions import ConnectionError as RequestsConnectionError
 
-from custom_components.rtetempo.api_worker import BadRequest, ServerError, UnexpectedError
+from custom_components.rtetempo.api import (
+    RTETempoAuthError,
+    RTETempoClientError,
+    RTETempoConnectionError,
+    RTETempoError,
+    RTETempoServerError,
+)
 from custom_components.rtetempo.config_flow import ConfigFlow, OptionsFlowHandler
 from custom_components.rtetempo.const import (
     CONFIG_CLIEND_SECRET,
@@ -21,8 +25,17 @@ from custom_components.rtetempo.const import (
 def mock_hass():
     """Create a mock HomeAssistant instance."""
     hass = MagicMock()
-    hass.async_add_executor_job = AsyncMock(side_effect=lambda f: f())
+    hass.data = {}
     return hass
+
+
+def _setup_flow(mock_hass) -> ConfigFlow:
+    """Create a ConfigFlow with mocked internals."""
+    flow = ConfigFlow()
+    flow.hass = mock_hass
+    flow.async_set_unique_id = AsyncMock()
+    flow._abort_if_unique_id_configured = MagicMock()
+    return flow
 
 
 class TestConfigFlow:
@@ -40,65 +53,76 @@ class TestConfigFlow:
     @pytest.mark.asyncio
     async def test_step_user_success(self, mock_hass):
         """Valid credentials -> entry created."""
-        flow = ConfigFlow()
-        flow.hass = mock_hass
-        flow.async_set_unique_id = AsyncMock()
-        flow._abort_if_unique_id_configured = MagicMock()
+        flow = _setup_flow(mock_hass)
         flow.async_create_entry = MagicMock(return_value={"type": FlowResultType.CREATE_ENTRY})
         with patch(
-            "custom_components.rtetempo.config_flow.application_tester"
+            "custom_components.rtetempo.config_flow.RTETempoClient"
+        ) as mock_client_cls, patch(
+            "custom_components.rtetempo.config_flow.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.config_flow.async_get_clientsession"
         ):
+            mock_client_cls.return_value.async_test_credentials = AsyncMock()
             result = await flow.async_step_user(
                 {CONFIG_CLIENT_ID: "my_id", CONFIG_CLIEND_SECRET: "my_secret"}
             )
         assert result["type"] == FlowResultType.CREATE_ENTRY
 
     @pytest.mark.asyncio
-    async def test_step_user_network_error(self, mock_hass):
-        """Network error -> form with error."""
-        flow = ConfigFlow()
-        flow.hass = mock_hass
-        flow.async_set_unique_id = AsyncMock()
-        flow._abort_if_unique_id_configured = MagicMock()
+    async def test_step_user_auth_error(self, mock_hass):
+        """Auth error -> form with oauth_error."""
+        flow = _setup_flow(mock_hass)
         flow.async_show_form = MagicMock(return_value={"type": FlowResultType.FORM})
         with patch(
-            "custom_components.rtetempo.config_flow.application_tester",
-            side_effect=RequestsConnectionError("offline"),
+            "custom_components.rtetempo.config_flow.RTETempoClient"
+        ) as mock_client_cls, patch(
+            "custom_components.rtetempo.config_flow.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.config_flow.async_get_clientsession"
         ):
+            mock_client_cls.return_value.async_test_credentials = AsyncMock(
+                side_effect=RTETempoAuthError("bad grant")
+            )
             result = await flow.async_step_user(
                 {CONFIG_CLIENT_ID: "id", CONFIG_CLIEND_SECRET: "secret"}
             )
         assert result["type"] == FlowResultType.FORM
 
     @pytest.mark.asyncio
-    async def test_step_user_oauth_error(self, mock_hass):
-        """OAuth error -> form with error."""
-        flow = ConfigFlow()
-        flow.hass = mock_hass
-        flow.async_set_unique_id = AsyncMock()
-        flow._abort_if_unique_id_configured = MagicMock()
+    async def test_step_user_connection_error(self, mock_hass):
+        """Connection error -> form with network_error."""
+        flow = _setup_flow(mock_hass)
         flow.async_show_form = MagicMock(return_value={"type": FlowResultType.FORM})
         with patch(
-            "custom_components.rtetempo.config_flow.application_tester",
-            side_effect=InvalidGrantError("bad grant"),
+            "custom_components.rtetempo.config_flow.RTETempoClient"
+        ) as mock_client_cls, patch(
+            "custom_components.rtetempo.config_flow.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.config_flow.async_get_clientsession"
         ):
+            mock_client_cls.return_value.async_test_credentials = AsyncMock(
+                side_effect=RTETempoConnectionError("offline")
+            )
             result = await flow.async_step_user(
                 {CONFIG_CLIENT_ID: "id", CONFIG_CLIEND_SECRET: "secret"}
             )
         assert result["type"] == FlowResultType.FORM
 
     @pytest.mark.asyncio
-    async def test_step_user_bad_request(self, mock_hass):
-        """BadRequest error -> form with error."""
-        flow = ConfigFlow()
-        flow.hass = mock_hass
-        flow.async_set_unique_id = AsyncMock()
-        flow._abort_if_unique_id_configured = MagicMock()
+    async def test_step_user_client_error(self, mock_hass):
+        """Client error -> form with http_client_error."""
+        flow = _setup_flow(mock_hass)
         flow.async_show_form = MagicMock(return_value={"type": FlowResultType.FORM})
         with patch(
-            "custom_components.rtetempo.config_flow.application_tester",
-            side_effect=BadRequest(400, "bad"),
+            "custom_components.rtetempo.config_flow.RTETempoClient"
+        ) as mock_client_cls, patch(
+            "custom_components.rtetempo.config_flow.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.config_flow.async_get_clientsession"
         ):
+            mock_client_cls.return_value.async_test_credentials = AsyncMock(
+                side_effect=RTETempoClientError(400, "bad request")
+            )
             result = await flow.async_step_user(
                 {CONFIG_CLIENT_ID: "id", CONFIG_CLIEND_SECRET: "secret"}
             )
@@ -106,16 +130,19 @@ class TestConfigFlow:
 
     @pytest.mark.asyncio
     async def test_step_user_server_error(self, mock_hass):
-        """ServerError -> form with error."""
-        flow = ConfigFlow()
-        flow.hass = mock_hass
-        flow.async_set_unique_id = AsyncMock()
-        flow._abort_if_unique_id_configured = MagicMock()
+        """Server error -> form with http_server_error."""
+        flow = _setup_flow(mock_hass)
         flow.async_show_form = MagicMock(return_value={"type": FlowResultType.FORM})
         with patch(
-            "custom_components.rtetempo.config_flow.application_tester",
-            side_effect=ServerError(500, "down"),
+            "custom_components.rtetempo.config_flow.RTETempoClient"
+        ) as mock_client_cls, patch(
+            "custom_components.rtetempo.config_flow.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.config_flow.async_get_clientsession"
         ):
+            mock_client_cls.return_value.async_test_credentials = AsyncMock(
+                side_effect=RTETempoServerError(500, "down")
+            )
             result = await flow.async_step_user(
                 {CONFIG_CLIENT_ID: "id", CONFIG_CLIEND_SECRET: "secret"}
             )
@@ -123,16 +150,19 @@ class TestConfigFlow:
 
     @pytest.mark.asyncio
     async def test_step_user_unexpected_error(self, mock_hass):
-        """UnexpectedError -> form with error."""
-        flow = ConfigFlow()
-        flow.hass = mock_hass
-        flow.async_set_unique_id = AsyncMock()
-        flow._abort_if_unique_id_configured = MagicMock()
+        """Unexpected error -> form with http_unexpected_error."""
+        flow = _setup_flow(mock_hass)
         flow.async_show_form = MagicMock(return_value={"type": FlowResultType.FORM})
         with patch(
-            "custom_components.rtetempo.config_flow.application_tester",
-            side_effect=UnexpectedError(418, "teapot"),
+            "custom_components.rtetempo.config_flow.RTETempoClient"
+        ) as mock_client_cls, patch(
+            "custom_components.rtetempo.config_flow.RTETempoAuth"
+        ), patch(
+            "custom_components.rtetempo.config_flow.async_get_clientsession"
         ):
+            mock_client_cls.return_value.async_test_credentials = AsyncMock(
+                side_effect=RTETempoError("teapot")
+            )
             result = await flow.async_step_user(
                 {CONFIG_CLIENT_ID: "id", CONFIG_CLIEND_SECRET: "secret"}
             )

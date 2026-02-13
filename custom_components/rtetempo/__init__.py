@@ -4,11 +4,13 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api_worker import APIWorker
-from .const import CONFIG_CLIEND_SECRET, CONFIG_CLIENT_ID, DOMAIN, OPTION_ADJUSTED_DAYS
+from .api import RTETempoAuth, RTETempoClient
+from .const import CONFIG_CLIEND_SECRET, CONFIG_CLIENT_ID, DOMAIN
+from .tempo_coordinator import TempoCoordinator
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.SENSOR]
 
@@ -25,42 +27,28 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up rtetempo from a config entry."""
-    # Create the API worker thread and start it
-    api_worker = APIWorker(
-        client_id=str(entry.data.get(CONFIG_CLIENT_ID)),
-        client_secret=str(entry.data.get(CONFIG_CLIEND_SECRET)),
-        adjusted_days=bool(entry.options.get(OPTION_ADJUSTED_DAYS)),
-    )
-    api_worker.start()
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, api_worker.signalstop)
+    session = async_get_clientsession(hass)
+    client_id = str(entry.data.get(CONFIG_CLIENT_ID))
+    client_secret = str(entry.data.get(CONFIG_CLIEND_SECRET))
+    auth = RTETempoAuth(session, client_id, client_secret)
+    client = RTETempoClient(session, auth)
+    coordinator = TempoCoordinator(hass, client)
+    await coordinator.async_config_entry_first_refresh()
     # Add options callback
     entry.async_on_unload(entry.add_update_listener(update_listener))
-    entry.async_on_unload(lambda: api_worker.signalstop("config_entry_unload"))
-    # Add the API worker to HA and initialize sensors
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"api_worker": api_worker}
+    # Store coordinator
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": coordinator}
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    # main init done
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        # Remove the related entry
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok
 
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
-    """Handle options update."""
-    # Retrieved the API Worker for this config entry
-    try:
-        api_worker = hass.data[DOMAIN][entry.entry_id]["api_worker"]
-    except KeyError:
-        _LOGGER.error(
-            "Can not update options for %s: failed to get the API Worker object",
-            entry.title,
-        )
-        return
-    # Update its options
-    api_worker.update_options(entry.options.get(OPTION_ADJUSTED_DAYS))
+    """Handle options update by reloading the config entry."""
+    await hass.config_entries.async_reload(entry.entry_id)

@@ -42,7 +42,7 @@ API_TOKEN_ENDPOINT = f"https://{API_DOMAIN}/token/oauth"
 API_TEMPO_ENDPOINT = (
     f"https://{API_DOMAIN}/open_api/tempo_like_supply_contract/v1/tempo_like_calendars"
 )
-API_REQ_TIMEOUT = 3
+API_DEFAULT_TIMEOUT = 10
 API_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 API_KEY_ERROR = "error"
 API_KEY_ERROR_DESC = "error_description"
