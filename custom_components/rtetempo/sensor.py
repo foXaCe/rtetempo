@@ -354,7 +354,7 @@ class DaysLeft(SensorEntity):
             self._attr_name = f"Cycle Jours restants {SENSOR_COLOR_RED_NAME}"
             self._attr_unique_id = f"{DOMAIN}_{config_id}_days_left_red"
         else:
-            raise Exception(f"invalid color {color}")
+            raise ValueError(f"invalid color {color}")
         # Sensor entity properties
         self._attr_native_value: int | None = None
         # RTE Tempo Calendar entity properties
@@ -413,7 +413,7 @@ class DaysLeft(SensorEntity):
             elif tempo_day.Value == API_VALUE_RED:
                 nb_red_days += 1
             else:
-                raise Exception(f"invalid color {tempo_day.Value}")
+                raise ValueError(f"invalid color {tempo_day.Value}")
         # Now compute remaining days
         if self._color == API_VALUE_BLUE:
             self._attr_native_value = total_blue_days - nb_blue_days
@@ -422,7 +422,7 @@ class DaysLeft(SensorEntity):
         elif self._color == API_VALUE_RED:
             self._attr_native_value = TOTAL_RED_DAYS - nb_red_days
         else:
-            raise Exception(f"invalid color {self._color}")
+            raise ValueError(f"invalid color {self._color}")
 
 
 class DaysUsed(SensorEntity):
@@ -448,7 +448,7 @@ class DaysUsed(SensorEntity):
             self._attr_name = f"Cycle Jours déjà placés {SENSOR_COLOR_RED_NAME}"
             self._attr_unique_id = f"{DOMAIN}_{config_id}_days_used_red"
         else:
-            raise Exception(f"invalid color {color}")
+            raise ValueError(f"invalid color {color}")
         # Sensor entity properties
         self._attr_native_value: int | None = None
         # RTE Tempo Calendar entity properties
@@ -496,7 +496,7 @@ class DaysUsed(SensorEntity):
             elif tempo_day.Value == API_VALUE_RED:
                 nb_red_days += 1
             else:
-                raise Exception(f"invalid color {tempo_day.Value}")
+                raise ValueError(f"invalid color {tempo_day.Value}")
         # Now compute remaining days
         if self._color == API_VALUE_BLUE:
             self._attr_native_value = nb_blue_days
@@ -505,7 +505,7 @@ class DaysUsed(SensorEntity):
         elif self._color == API_VALUE_RED:
             self._attr_native_value = nb_red_days
         else:
-            raise Exception(f"invalid color {self._color}")
+            raise ValueError(f"invalid color {self._color}")
 
 
 class NextCycleTime(SensorEntity):

@@ -273,7 +273,7 @@ class TestDaysLeft:
         assert SENSOR_COLOR_RED_NAME in sensor._attr_name
 
     def test_init_invalid_color(self, mock_api_worker):
-        with pytest.raises(Exception, match="invalid color"):
+        with pytest.raises(ValueError, match="invalid color"):
             DaysLeft("cfg", mock_api_worker, "PURPLE")
 
     def test_update_counts_remaining_days(self, mock_api_worker):
@@ -318,7 +318,7 @@ class TestDaysUsed:
         assert "days_used_blue" in sensor._attr_unique_id
 
     def test_init_invalid_color(self, mock_api_worker):
-        with pytest.raises(Exception, match="invalid color"):
+        with pytest.raises(ValueError, match="invalid color"):
             DaysUsed("cfg", mock_api_worker, "PURPLE")
 
     def test_update_counts_used_days(self, mock_api_worker):
