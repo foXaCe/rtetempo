@@ -4,11 +4,11 @@
             "already_configured": "Integration is already configured"
         },
         "error": {
-            "network_error": "A network error occured, please check the logs",
-            "oauth_error": "An OAuth2 related error occured, please check the logs",
-            "http_client_error": "A client side error occured, please check the logs",
-            "http_server_error": "A server side error occured, please check the logs",
-            "http_unexpected_error": "An unexpected HTTP error occured, please check the logs"
+            "network_error": "A network error occurred, please check the logs",
+            "oauth_error": "An OAuth2 related error occurred, please check the logs",
+            "http_client_error": "A client side error occurred, please check the logs",
+            "http_server_error": "A server side error occurred, please check the logs",
+            "http_unexpected_error": "An unexpected HTTP error occurred, please check the logs"
         },
         "step": {
             "user": {

@@ -6,10 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.rtetempo.api_worker import TempoDay
 from custom_components.rtetempo.calendar import (
-    async_setup_entry,
     TempoCalendar,
+    async_setup_entry,
     forge_calendar_event,
     forge_calendar_event_description,
     get_value_emoji,
@@ -30,7 +29,6 @@ from custom_components.rtetempo.const import (
 )
 
 from .conftest import make_tempo_day_date, make_tempo_day_time
-
 
 # ── get_value_emoji ─────────────────────────────────────────────────────
 
@@ -284,13 +282,13 @@ class TestCalendarAsyncSetupEntry:
     async def test_success(self, mock_api_worker):
         """Setup creates calendar entity."""
         hass = MagicMock()
-        hass.data = {DOMAIN: {"entry_id": mock_api_worker}}
+        hass.data = {DOMAIN: {"entry_id": {"api_worker": mock_api_worker}}}
+        hass.async_add_executor_job = AsyncMock(return_value=True)
         config_entry = MagicMock()
         config_entry.entry_id = "entry_id"
         config_entry.title = "Test"
         add_entities = MagicMock()
-        with patch("custom_components.rtetempo.calendar.asyncio.sleep", new_callable=AsyncMock):
-            await async_setup_entry(hass, config_entry, add_entities)
+        await async_setup_entry(hass, config_entry, add_entities)
         add_entities.assert_called_once()
         entities = add_entities.call_args[0][0]
         assert len(entities) == 1

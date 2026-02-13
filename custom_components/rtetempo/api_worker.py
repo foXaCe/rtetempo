@@ -7,13 +7,12 @@ import random
 import threading
 from typing import NamedTuple
 
+import requests
+from homeassistant.core import callback
 from oauthlib.oauth2 import BackendApplicationClient, TokenExpiredError
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
-import requests
 from requests.auth import HTTPBasicAuth
 from requests_oauthlib import OAuth2Session
-
-from homeassistant.core import callback
 
 from .const import (
     API_DATE_FORMAT,
@@ -28,7 +27,6 @@ from .const import (
     API_REQ_TIMEOUT,
     API_TEMPO_ENDPOINT,
     API_TOKEN_ENDPOINT,
-    API_VALUE_BLUE,
     CONFIRM_CHECK,
     CONFIRM_HOUR,
     CONFIRM_MIN,
@@ -53,7 +51,7 @@ class TempoDay(NamedTuple):
 
 
 class APIWorker(threading.Thread):
-    """API Worker is an autonomous thread querying, parsing an caching the RTE Tempo calendar API in an optimal way."""
+    """Autonomous thread querying, parsing and caching the RTE Tempo calendar API."""
 
     def __init__(self, client_id: str, client_secret: str, adjusted_days: bool) -> None:
         """Initialize the API Worker thread."""
@@ -68,22 +66,32 @@ class APIWorker(threading.Thread):
         self._tempo_days_time: list[TempoDay] = []
         self._tempo_days_date: list[TempoDay] = []
         self.adjusted_days: bool = adjusted_days
+        self._lock = threading.Lock()
+        self._data_ready = threading.Event()
         # Init parent thread class
         super().__init__(name="RTE Tempo API Worker")
+        self.daemon = True
 
     def get_calendar_days(self) -> list[TempoDay]:
         """Get the tempo days suited for calendar."""
-        if self.adjusted_days:
-            return self._tempo_days_time
-        return self._tempo_days_date
+        with self._lock:
+            if self.adjusted_days:
+                return list(self._tempo_days_time)
+            return list(self._tempo_days_date)
 
     def get_adjusted_days(self) -> list[TempoDay]:
         """Get the tempo adjusted days."""
-        return self._tempo_days_time
+        with self._lock:
+            return list(self._tempo_days_time)
 
     def get_regular_days(self) -> list[TempoDay]:
-        """Get the tempo adjusted days."""
-        return self._tempo_days_date
+        """Get the tempo regular days."""
+        with self._lock:
+            return list(self._tempo_days_date)
+
+    def wait_for_data(self, timeout: float) -> bool:
+        """Wait for initial data to be available."""
+        return self._data_ready.wait(timeout=timeout)
 
     def run(self):
         """Execute thread payload."""
@@ -100,7 +108,7 @@ class APIWorker(threading.Thread):
             )
             # Wait depending on last result fetched
             wait_time = self._compute_wait_time(localized_now, end)
-            stop = self._stopevent.wait(float(wait_time.seconds))
+            stop = self._stopevent.wait(wait_time.total_seconds())
         # stopping thread
         _LOGGER.info("Thread stopped")
 
@@ -156,11 +164,12 @@ class APIWorker(threading.Thread):
                     tzinfo=localized_now.tzinfo,
                 )
                 wait_time = next_call - localized_now
+                wait_secs = int(wait_time.total_seconds())
                 wait_time = datetime.timedelta(
-                    seconds=random.randrange(wait_time.seconds, wait_time.seconds + 900)
+                    seconds=random.randrange(wait_secs, wait_secs + 900)
                 )
                 _LOGGER.info(
-                    "We got next day color, waiting until tomorrow to get futur next day color (wait time is %s)",
+                    "We got next day color, waiting until tomorrow (wait time is %s)",
                     wait_time,
                 )
             else:
@@ -174,13 +183,15 @@ class APIWorker(threading.Thread):
                     tzinfo=localized_now.tzinfo,
                 )
                 wait_time = next_call - localized_now
+                wait_secs = int(wait_time.total_seconds())
                 wait_time = datetime.timedelta(
                     seconds=random.randrange(
-                        wait_time.seconds - 900, wait_time.seconds + 900
+                        wait_secs - 900, wait_secs + 900
                     )  # +- 15min
                 )
                 _LOGGER.info(
-                    "We got next day color but we it is too early to be sure: waiting until confirmation hour to get futur next day color (wait time is %s)",
+                    "We got next day color but too early to confirm, "
+                    "waiting until confirmation hour (wait time is %s)",
                     wait_time,
                 )
         elif diff.days == 1:
@@ -191,40 +202,45 @@ class APIWorker(threading.Thread):
                     month=localized_now.month,
                     day=localized_now.day,
                     hour=HOUR_OF_CHANGE,
-                    second=1,  # workaround for multiples requests spamming API at 5:59:59... because of imprecise wait time
+                    second=1,  # avoid multiple requests at 5:59:59
                     tzinfo=localized_now.tzinfo,
                 )
                 wait_time = next_call - localized_now
+                wait_secs = int(wait_time.total_seconds())
                 wait_time = datetime.timedelta(
-                    seconds=random.randrange(wait_time.seconds, wait_time.seconds + 900)
+                    seconds=random.randrange(wait_secs, wait_secs + 900)
                 )
                 _LOGGER.debug(
-                    "We do not have next day color yet, waiting hour of day change at %sh (wait time is %s)",
+                    "No next day color, waiting for %sh change (wait time is %s)",
                     HOUR_OF_CHANGE,
                     wait_time,
                 )
             else:
                 wait_time = datetime.timedelta(minutes=30)
+                wait_secs = int(wait_time.total_seconds())
                 wait_time = datetime.timedelta(
                     seconds=random.randrange(
-                        int(wait_time.seconds * 5 / 6), int(wait_time.seconds * 7 / 6)
+                        wait_secs * 5 // 6, wait_secs * 7 // 6
                     )
                 )
                 _LOGGER.debug(
-                    "We do not have next day color yet and hour of change (%sh) is already past, retrying soon (wait time is %s)",
+                    "No next day color, hour of change (%sh) past, "
+                    "retrying soon (wait time is %s)",
                     HOUR_OF_CHANGE,
                     wait_time,
                 )
         else:
             # weird, should not happen
             wait_time = datetime.timedelta(hours=1)
+            wait_secs = int(wait_time.total_seconds())
             wait_time = datetime.timedelta(
                 seconds=random.randrange(
-                    int(wait_time.seconds * 5 / 6), int(wait_time.seconds * 7 / 6)
+                    wait_secs * 5 // 6, wait_secs * 7 // 6
                 )
             )
             _LOGGER.warning(
-                "Unexpected delta encountered between today and last result, waiting %s as fallback",
+                "Unexpected delta between today and last result, "
+                "waiting %s as fallback",
                 wait_time,
             )
         # all good
@@ -336,40 +352,19 @@ class APIWorker(threading.Thread):
                     )
                 )
             except KeyError as key_error:
-                if tempo_day[API_KEY_START] == "2022-12-28T00:00:00+01:00":
-                    # RTE has issued a warning concerning this day missing data on their API: its blue
-                    tempo_days_time.append(
-                        TempoDay(
-                            Start=adjust_tempo_time(
-                                parse_rte_api_datetime(tempo_day[API_KEY_START])
-                            ),
-                            End=adjust_tempo_time(
-                                parse_rte_api_datetime(tempo_day[API_KEY_END])
-                            ),
-                            Value=API_VALUE_BLUE,
-                            Updated=parse_rte_api_datetime(tempo_day[API_KEY_UPDATED]),
-                        )
-                    )
-                    time_days_date.append(
-                        TempoDay(
-                            Start=parse_rte_api_date(tempo_day[API_KEY_START]),
-                            End=parse_rte_api_date(tempo_day[API_KEY_END]),
-                            Value=API_VALUE_BLUE,
-                            Updated=parse_rte_api_datetime(tempo_day[API_KEY_UPDATED]),
-                        )
-                    )
-                else:
-                    _LOGGER.warning(
-                        "Following day failed to be processed with %s, skipping: %s",
-                        repr(key_error),
-                        tempo_day,
-                    )
+                _LOGGER.warning(
+                    "Following day failed to be processed with %s, skipping: %s",
+                    repr(key_error),
+                    tempo_day,
+                )
         # Save data in memory
-        self._tempo_days_time = tempo_days_time
-        self._tempo_days_date = time_days_date
+        with self._lock:
+            self._tempo_days_time = tempo_days_time
+            self._tempo_days_date = time_days_date
+        self._data_ready.set()
         # Return results last end date in order for caller to compute next call time
-        if len(self._tempo_days_date) > 0:
-            newest_result = self._tempo_days_date[0].End
+        if len(time_days_date) > 0:
+            newest_result = max(time_days_date, key=lambda d: d.End).End
             return datetime.datetime(
                 year=newest_result.year,
                 month=newest_result.month,

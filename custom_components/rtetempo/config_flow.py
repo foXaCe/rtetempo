@@ -89,7 +89,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handles the options of a Linky TIC connection."""
+    """Handles the options of an RTE Tempo config entry."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

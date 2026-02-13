@@ -1,11 +1,11 @@
-"""Binary sensors for linkytic integration."""
+"""Binary sensors for RTE Tempo Calendar integration."""
 from __future__ import annotations
 
 import datetime
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -37,7 +37,7 @@ async def async_setup_entry(
 
 
 class OffPeakHours(BinarySensorEntity):
-    """Serial connectivity to the Linky TIC serial interface."""
+    """Off Peak Hours binary sensor."""
 
     # Generic properties
     #   https://developers.home-assistant.io/docs/core/entity#generic-properties
@@ -54,8 +54,6 @@ class OffPeakHours(BinarySensorEntity):
         """Initialize the OffPeakHours binary sensor."""
         # Generic entity properties
         self._attr_unique_id = f"{DOMAIN}_{config_id}_off_peak"
-        # Sensor entity properties
-        self._attr_native_value: datetime.datetime | None = None
         # RTE Tempo Calendar entity properties
         self._config_id = config_id
 
@@ -70,7 +68,6 @@ class OffPeakHours(BinarySensorEntity):
             model=DEVICE_MODEL,
         )
 
-    @callback
     def update(self) -> None:
         """Update/Recompute the value of the sensor."""
         localized_now = datetime.datetime.now(tz=FRANCE_TZ)

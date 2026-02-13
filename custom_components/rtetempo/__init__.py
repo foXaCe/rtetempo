@@ -25,7 +25,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up rtetempo from a config entry."""
-    # Create the serial reader thread and start it
+    # Create the API worker thread and start it
     api_worker = APIWorker(
         client_id=str(entry.data.get(CONFIG_CLIENT_ID)),
         client_secret=str(entry.data.get(CONFIG_CLIEND_SECRET)),
@@ -36,12 +36,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Add options callback
     entry.async_on_unload(entry.add_update_listener(update_listener))
     entry.async_on_unload(lambda: api_worker.signalstop("config_entry_unload"))
-    # Add the serial reader to HA and initialize sensors
-    try:
-        hass.data[DOMAIN][entry.entry_id] = api_worker
-    except KeyError:
-        hass.data[DOMAIN] = {}
-        hass.data[DOMAIN][entry.entry_id] = api_worker
+    # Add the API worker to HA and initialize sensors
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"api_worker": api_worker}
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     # main init done
     return True
@@ -59,7 +55,7 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
     """Handle options update."""
     # Retrieved the API Worker for this config entry
     try:
-        serial_reader = hass.data[DOMAIN][entry.entry_id]
+        api_worker = hass.data[DOMAIN][entry.entry_id]["api_worker"]
     except KeyError:
         _LOGGER.error(
             "Can not update options for %s: failed to get the API Worker object",
@@ -67,4 +63,4 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
         )
         return
     # Update its options
-    serial_reader.update_options(entry.options.get(OPTION_ADJUSTED_DAYS))
+    api_worker.update_options(entry.options.get(OPTION_ADJUSTED_DAYS))

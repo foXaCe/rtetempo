@@ -13,7 +13,6 @@ from custom_components.rtetempo.config_flow import ConfigFlow, OptionsFlowHandle
 from custom_components.rtetempo.const import (
     CONFIG_CLIEND_SECRET,
     CONFIG_CLIENT_ID,
-    DOMAIN,
     OPTION_ADJUSTED_DAYS,
 )
 

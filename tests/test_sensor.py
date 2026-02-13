@@ -462,14 +462,14 @@ class TestSensorAsyncSetupEntry:
     async def test_success(self, mock_api_worker):
         """Setup creates 13 existing + 12 forecast sensor entities."""
         hass = MagicMock()
-        hass.data = {DOMAIN: {"entry_id": mock_api_worker}}
+        hass.data = {DOMAIN: {"entry_id": {"api_worker": mock_api_worker}}}
+        hass.async_add_executor_job = AsyncMock(return_value=True)
         config_entry = MagicMock()
         config_entry.entry_id = "entry_id"
         config_entry.title = "Test"
         config_entry.async_create_background_task = MagicMock()
         add_entities = MagicMock()
         with (
-            patch("custom_components.rtetempo.sensor.asyncio.sleep", new_callable=AsyncMock),
             patch("custom_components.rtetempo.forecast_coordinator.async_get_clientsession"),
             patch("homeassistant.helpers.frame.report_usage"),
         ):

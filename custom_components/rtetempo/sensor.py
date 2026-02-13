@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import datetime
 import logging
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -54,15 +53,15 @@ async def async_setup_entry(
     _LOGGER.debug("%s: setting up sensor plateform", config_entry.title)
     # Retrieve the API Worker object
     try:
-        api_worker = hass.data[DOMAIN][config_entry.entry_id]
+        api_worker = hass.data[DOMAIN][config_entry.entry_id]["api_worker"]
     except KeyError:
         _LOGGER.error(
-            "%s: can not calendar: failed to get the API worker object",
+            "%s: can not setup sensors: failed to get the API worker object",
             config_entry.title,
         )
         return
-    # Wait request timeout to let API worker get first batch of data before initializing sensors
-    await asyncio.sleep(API_REQ_TIMEOUT)
+    # Wait for API worker to get first batch of data before initializing sensors
+    await hass.async_add_executor_job(api_worker.wait_for_data, API_REQ_TIMEOUT)
     # Init sensors
     sensors = [
         CurrentColor(config_entry.entry_id, api_worker, False),
@@ -149,7 +148,6 @@ class CurrentColor(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    @callback
     def update(self) -> None:
         """Update the value of the sensor from the thread object memory cache."""
         localized_now = datetime.datetime.now(FRANCE_TZ)
@@ -219,7 +217,6 @@ class NextColor(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    @callback
     def update(self) -> None:
         """Update the value of the sensor from the thread object memory cache."""
         localized_now = datetime.datetime.now(FRANCE_TZ)
@@ -308,7 +305,6 @@ class NextColorTime(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    @callback
     def update(self) -> None:
         """Update the value of the sensor from the thread object memory cache."""
         localized_now = datetime.datetime.now(FRANCE_TZ)
@@ -373,7 +369,6 @@ class DaysLeft(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    @callback
     def update(self) -> None:
         """Update the value of the sensor from the thread object memory cache."""
         # First compute the number of days this cycle has (handles leap year)
@@ -405,7 +400,7 @@ class DaysLeft(SensorEntity):
         nb_red_days = 0
         for tempo_day in self._api_worker.get_regular_days():
             if tempo_day.Start < cycle_start:
-                break
+                continue
             if tempo_day.Value == API_VALUE_BLUE:
                 nb_blue_days += 1
             elif tempo_day.Value == API_VALUE_WHITE:
@@ -467,7 +462,6 @@ class DaysUsed(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    @callback
     def update(self) -> None:
         """Update the value of the sensor from the thread object memory cache."""
         # First compute the number of days this cycle has (handles leap year)
@@ -488,7 +482,7 @@ class DaysUsed(SensorEntity):
         nb_red_days = 0
         for tempo_day in self._api_worker.get_regular_days():
             if tempo_day.Start < cycle_start:
-                break
+                continue
             if tempo_day.Value == API_VALUE_BLUE:
                 nb_blue_days += 1
             elif tempo_day.Value == API_VALUE_WHITE:
@@ -537,11 +531,14 @@ class NextCycleTime(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    @callback
     def update(self) -> None:
         """Update the value of the sensor from the thread object memory cache."""
         localized_now = datetime.datetime.now(tz=FRANCE_TZ)
-        if localized_now.month >= CYCLE_START_MONTH and localized_now.day >= CYCLE_START_DAY:
+        past_cycle_start = localized_now.month > CYCLE_START_MONTH or (
+            localized_now.month == CYCLE_START_MONTH
+            and localized_now.day >= CYCLE_START_DAY
+        )
+        if past_cycle_start:
             self._attr_native_value = datetime.datetime(
                 year=localized_now.year + 1,
                 month=CYCLE_START_MONTH,
@@ -588,7 +585,6 @@ class OffPeakChangeTime(SensorEntity):
             model=DEVICE_MODEL,
         )
 
-    @callback
     def update(self) -> None:
         """Update/Recompute the value of the sensor."""
         localized_now = datetime.datetime.now(tz=FRANCE_TZ)

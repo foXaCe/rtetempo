@@ -1,7 +1,6 @@
 """RTE Tempo Calendar."""
 from __future__ import annotations
 
-import asyncio
 import datetime
 import logging
 
@@ -46,15 +45,15 @@ async def async_setup_entry(
     _LOGGER.debug("%s: setting up calendar plateform", config_entry.title)
     # Retrieve the API Worker object
     try:
-        api_worker = hass.data[DOMAIN][config_entry.entry_id]
+        api_worker = hass.data[DOMAIN][config_entry.entry_id]["api_worker"]
     except KeyError:
         _LOGGER.error(
-            "%s: can not calendar: failed to get the API worker object",
+            "%s: can not setup calendar: failed to get the API worker object",
             config_entry.title,
         )
         return
-    # Wait request timeout to let API worker get first batch of data before initializing calendar
-    await asyncio.sleep(API_REQ_TIMEOUT)
+    # Wait for API worker to get first batch of data before initializing calendar
+    await hass.async_add_executor_job(api_worker.wait_for_data, API_REQ_TIMEOUT)
     # Init sensors
     async_add_entities(
         [TempoCalendar(api_worker, config_entry.entry_id)],
@@ -69,7 +68,7 @@ class TempoCalendar(CalendarEntity):
     _attr_has_entity_name = True
     _attr_attribution = API_ATTRIBUTION
 
-    def __init__(self, api_worker: APIWorker, config_id) -> None:
+    def __init__(self, api_worker: APIWorker, config_id: str) -> None:
         """Initialize the calendar."""
         # Generic entity properties
         self._attr_name = "Calendrier"
@@ -168,7 +167,7 @@ def forge_calendar_event(tempo_day: TempoDay):
     )
 
 
-def get_value_emoji(value) -> str:
+def get_value_emoji(value: str) -> str:
     """Get corresponding emoji for tempo value."""
     if value == API_VALUE_RED:
         return SENSOR_COLOR_RED_EMOJI

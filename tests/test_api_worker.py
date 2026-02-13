@@ -25,7 +25,6 @@ from custom_components.rtetempo.const import FRANCE_TZ, HOUR_OF_CHANGE
 
 from .conftest import make_tempo_day_date, make_tempo_day_time
 
-
 # ── parse_rte_api_datetime ──────────────────────────────────────────────
 
 
@@ -474,25 +473,8 @@ class TestUpdateTempoDays:
             result = worker._update_tempo_days(reftime, 1, 2)
         assert result is None
 
-    def test_missing_value_key_known_date_workaround(self):
-        """The known 2022-12-28 workaround should fallback to BLUE."""
-        worker = APIWorker("id", "secret", adjusted_days=False)
-        resp = self._make_api_response([
-            {
-                "start_date": "2022-12-28T00:00:00+01:00",
-                "end_date": "2022-12-29T00:00:00+01:00",
-                "updated_date": "2022-12-28T10:00:00+01:00",
-                # Missing "value" key
-            }
-        ])
-        with patch.object(worker, "_get_tempo_data", return_value=resp):
-            reftime = datetime.datetime(2022, 12, 28, 12, 0, tzinfo=FRANCE_TZ)
-            result = worker._update_tempo_days(reftime, 1, 2)
-        assert len(worker._tempo_days_date) == 1
-        assert worker._tempo_days_date[0].Value == "BLUE"
-
-    def test_missing_value_key_unknown_date_skipped(self):
-        """Unknown dates with missing value key should be skipped."""
+    def test_missing_value_key_skipped(self):
+        """Days with missing value key should be skipped."""
         worker = APIWorker("id", "secret", adjusted_days=False)
         resp = self._make_api_response([
             {

@@ -119,7 +119,7 @@ class TestAsyncUnloadEntry:
     @pytest.mark.asyncio
     async def test_unload_success(self, mock_hass, mock_entry):
         """Test successful unload removes entry data."""
-        mock_hass.data[DOMAIN] = {mock_entry.entry_id: MagicMock()}
+        mock_hass.data[DOMAIN] = {mock_entry.entry_id: {"api_worker": MagicMock()}}
         result = await async_unload_entry(mock_hass, mock_entry)
         assert result is True
         assert mock_entry.entry_id not in mock_hass.data[DOMAIN]
@@ -128,7 +128,7 @@ class TestAsyncUnloadEntry:
     async def test_unload_failure(self, mock_hass, mock_entry):
         """Test failed unload keeps entry data."""
         mock_hass.config_entries.async_unload_platforms = AsyncMock(return_value=False)
-        mock_hass.data[DOMAIN] = {mock_entry.entry_id: MagicMock()}
+        mock_hass.data[DOMAIN] = {mock_entry.entry_id: {"api_worker": MagicMock()}}
         result = await async_unload_entry(mock_hass, mock_entry)
         assert result is False
         assert mock_entry.entry_id in mock_hass.data[DOMAIN]
@@ -141,7 +141,7 @@ class TestUpdateListener:
     async def test_update_options(self, mock_hass, mock_entry):
         """Test options are updated on the worker."""
         mock_worker = MagicMock()
-        mock_hass.data[DOMAIN] = {mock_entry.entry_id: mock_worker}
+        mock_hass.data[DOMAIN] = {mock_entry.entry_id: {"api_worker": mock_worker}}
         mock_entry.options = {OPTION_ADJUSTED_DAYS: True}
         await update_listener(mock_hass, mock_entry)
         mock_worker.update_options.assert_called_once_with(True)
